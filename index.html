@@ -4,7 +4,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex,nofollow">
 <script src="./config.js"></script>
-<script src="./api-client.js"></script>
+<script src="./api-client.js?v=159-login1"></script>
 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1947,6 +1947,23 @@ function loginMsg(kind, text) {
 var LOGIN_BUSY156_ = false;
 function doLogin() {
   if (LOGIN_BUSY156_) { return; }
+  // Identity can expire while the user leaves this screen open. Complete that
+  // step before reading an app password or beginning the admin login request.
+  if (!MAISD_API.hasIdentity()) {
+    $('loginPass').value = '';
+    LOGIN_BUSY156_ = true;
+    $('loginBtn').disabled = true;
+    $('loginScreen').classList.add('hidden');
+    loginMsg('', 'Complete Google sign-in, then enter your app password.');
+    return MAISD_API.ensureIdentity().then(function () {
+      $('loginScreen').classList.remove('hidden');
+      loginMsg('', 'Enter your app password.');
+      $('loginPass').focus();
+    }).catch(function () { killPreloader(); }).finally(function () {
+      LOGIN_BUSY156_ = false;
+      $('loginBtn').disabled = false;
+    });
+  }
   var user = $('loginUser').value.trim();
   var pass = $('loginPass').value;
   if (!user || !pass) { loginMsg('bad', 'Enter your username and password.'); return; }
@@ -2106,7 +2123,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  checkSetup(true).then(function () { showLogin(); });
+  MAISD_API.ensureIdentity()
+    .then(function () { return checkSetup(true); })
+    .then(function () { showLogin(); })
+    .catch(function () { killPreloader(); });
 });
 </script>
 <script>

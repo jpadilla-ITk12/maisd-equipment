@@ -26,13 +26,17 @@
       var body=document.createElement('p');body.textContent='Continue with your school Google account.';
       var button=document.createElement('div');button.id='maisd-google-button';
       var status=document.createElement('p');status.id='maisd-google-message';status.setAttribute('role','status');status.style.cssText='font-size:14px;line-height:1.5';
-      card.append(title,body,button,status);panel.append(card);document.body.append(panel);
+      var retry=document.createElement('button');retry.id='maisd-google-reload';retry.type='button';retry.textContent='Reload sign-in';retry.hidden=true;
+      retry.style.cssText='padding:10px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white;cursor:pointer;font:inherit';
+      retry.onclick=function(){global.location.reload();};
+      card.append(title,body,button,status,retry);panel.append(card);document.body.append(panel);
     }
     document.getElementById('maisd-google-message').textContent=message||'';
     return panel;
   }
   function rejectIdentity(error){
-    identityPanel(error.message);var p=pendingIdentity;pendingIdentity=null;if(p)p.reject(error);
+    identityPanel(error.message);document.getElementById('maisd-google-reload').hidden=false;
+    var p=pendingIdentity;pendingIdentity=null;if(p)p.reject(error);
   }
   function acceptCredential(response){
     var token=response&&response.credential,claims=decode(token||''),c=config();
@@ -65,7 +69,7 @@
     pendingIdentity={promise:promise,resolve:resolve,reject:reject};
     function launch(){
       try{
-        identityPanel('');
+        identityPanel('Loading Google sign-in…');
         if(global.google&&google.accounts&&google.accounts.id){showGoogleButton();return;}
         var existing=document.getElementById('maisd-gsi-library');
         if(existing){showGoogleButton();return;}
@@ -77,6 +81,20 @@
     }
     if(document.body)launch();else document.addEventListener('DOMContentLoaded',launch,{once:true});
     return promise;
+  }
+  function timing(method,started,result){
+    var detail={method:method,durationMs:Math.round(performance.now()-started),ok:result.ok};
+    // Only accept known, finite counters. Never copy response data or credentials
+    // into diagnostics, even if an API response contains unexpected fields.
+    var raw=result._timing;
+    if(raw&&typeof raw==='object'){
+      var server={};
+      ['serverMs','readMs','readCalls'].forEach(function(key){
+        if(typeof raw[key]==='number'&&Number.isFinite(raw[key])&&raw[key]>=0)server[key]=raw[key];
+      });
+      if(Object.keys(server).length)detail.server=server;
+    }
+    return detail;
   }
   async function request(method,args){
     var c=config(),credential=await getIdentity();
@@ -92,8 +110,9 @@
       var result;try{result=await response.json();}catch(e){throw new Error('The API did not return a valid response. Check save status before submitting again.');}
       if(!result||typeof result!=='object'||typeof result.ok!=='boolean')throw new Error('The API response was incomplete. Check save status before submitting again.');
       if(result.code==='GOOGLE_AUTH_REQUIRED'){forget();clientInitialized=false;}
-      if(global.console&&global.console.debug)global.console.debug('[MAISD timing] '+JSON.stringify({method:method,durationMs:Math.round(performance.now()-started),ok:result.ok}));
-      if(c.diagnostics===true)global.dispatchEvent(new CustomEvent('maisd-api-timing',{detail:{method:method,durationMs:Math.round(performance.now()-started),ok:result.ok}}));
+      var detail=timing(method,started,result);
+      if(global.console&&global.console.debug)global.console.debug('[MAISD timing] '+JSON.stringify(detail));
+      if(c.diagnostics===true)global.dispatchEvent(new CustomEvent('maisd-api-timing',{detail:detail}));
       return result;
     }catch(error){
       // A network failure does not prove a write failed. Never automatically
@@ -111,7 +130,10 @@
       return function(){var args=Array.prototype.slice.call(arguments);Promise.resolve().then(function(){return request(name,args);}).then(function(result){if(success)success(result,userObject);},function(error){if(failure)failure(error,userObject);});};
     }});
   }
-  global.MAISD_API={runner:runner(),request:request,clearGoogleIdentity:forget};
+  global.MAISD_API={runner:runner(),request:request,clearGoogleIdentity:forget,
+    hasIdentity:function(){if(!usable(googleCredential))restore();return !!usable(googleCredential);},
+    ensureIdentity:function(){return getIdentity().then(function(){return undefined;});}
+  };
   function checkConfig(){try{config();}catch(e){identityPanel(e.message);}}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',checkConfig,{once:true});else checkConfig();
 })(window);
