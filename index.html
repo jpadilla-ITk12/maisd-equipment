@@ -1739,6 +1739,7 @@ function go(id, opts) {
     toast('warn', 'Not allowed', 'Your role cannot open ' + (PAGE_LABEL[id] || id) + '.');
     return;
   }
+  var samePage=S.page===id;
   var navigation = ++NAVIGATION154;
   if(['assets','dashboard','districtreports'].indexOf(id)>=0 && !(opts && opts.preserveEquipmentPage)) {QUERY14_.snapshot='';QUERY14_.page=0;}
   S.page = id;
@@ -1749,8 +1750,13 @@ function go(id, opts) {
   $('tbTitle').textContent = PAGE_LABEL[id] || id;
   $('tbSub').textContent = PAGE_SUB[id] || '';
   var host = $('pageHost');
-  host.innerHTML = skeleton(id !== 'help' && id !== 'templates');
-  window.scrollTo(0, 0);
+  var status=$('pageRefreshStatus158');
+  if(!status){status=document.createElement('div');status.id='pageRefreshStatus158';status.setAttribute('role','status');status.style.cssText='padding:8px 16px;color:var(--muted);font-size:13px';host.parentNode.insertBefore(status,host);}
+  status.textContent=samePage?'Updating…':'Loading…';status.hidden=false;
+  host.setAttribute('aria-busy','true');host.inert=true;
+  if(!samePage||!host.children.length)host.innerHTML=skeleton(id !== 'help' && id !== 'templates');
+  if(!samePage)window.scrollTo(0,0);
+  function finished(){if(navigation===NAVIGATION154){host.removeAttribute('aria-busy');host.inert=false;status.hidden=true;}}
   closePops();
   try {
     var res = PAGES[id](opts || {});
@@ -1759,11 +1765,11 @@ function go(id, opts) {
         if(navigation !== NAVIGATION154 || e && e.code==='STALE_NAVIGATION')return;
         host.innerHTML = printHeader() + errorPanel(e);
         oops(e);
-      });
-    }
+      }).finally(finished);
+    }else{finished();}
   } catch (e) {
     host.innerHTML = printHeader() + errorPanel(e);
-    oops(e);
+    oops(e);finished();
   }
 }
 window.go = go;

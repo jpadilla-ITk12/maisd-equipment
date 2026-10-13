@@ -92,6 +92,7 @@
       var result;try{result=await response.json();}catch(e){throw new Error('The API did not return a valid response. Check save status before submitting again.');}
       if(!result||typeof result!=='object'||typeof result.ok!=='boolean')throw new Error('The API response was incomplete. Check save status before submitting again.');
       if(result.code==='GOOGLE_AUTH_REQUIRED'){forget();clientInitialized=false;}
+      if(global.console&&global.console.debug)global.console.debug('[MAISD timing] '+JSON.stringify({method:method,durationMs:Math.round(performance.now()-started),ok:result.ok}));
       if(c.diagnostics===true)global.dispatchEvent(new CustomEvent('maisd-api-timing',{detail:{method:method,durationMs:Math.round(performance.now()-started),ok:result.ok}}));
       return result;
     }catch(error){
