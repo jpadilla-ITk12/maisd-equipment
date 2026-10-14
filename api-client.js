@@ -170,6 +170,9 @@
   }
   function readView(method,args,context){
     if(!viewEligible(method,args))return request(method,args);
+    // Finish identity renewal before recording the cache generation and owner.
+    // Renewal clears expired snapshots; it must not invalidate its own fresh read.
+    if(!usable(googleCredential)){clearViews();return getIdentity().then(function(){return readView(method,args,context);});}
     var started=performance.now(),entry=getView(method,args),source=entry?'memory':'network',age=entry?Date.now()-entry.at:0;
     var owner=currentViewOwner(args),epoch=viewEpoch,key=viewKey(method,args),pending=viewPending.get(key),promise;
     if(entry)promise=Promise.resolve(copyView(entry.value));
@@ -202,7 +205,7 @@
   }
   function installFastViews(){
     if(!global.PAGES||!global.S||global.MAISD_FAST_VIEWS)return;
-    global.MAISD_FAST_VIEWS='20261013.1';
+    global.MAISD_FAST_VIEWS='20261014.1';
     var pages=['assets','dashboard','districtreports','maintenance','assignments'];
     function freshness(context,page){
       if(global.S.page!==page||context.navigation!==global.NAVIGATION154)return;
